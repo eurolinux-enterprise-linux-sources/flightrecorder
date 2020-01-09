@@ -1,0 +1,8 @@
+/var/log/trace-cmd.log {
+    missingok
+    notifempty
+    daily
+    rotate 2
+    size=10M
+    create 0644 root root
+}

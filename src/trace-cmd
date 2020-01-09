@@ -1,0 +1,160 @@
+#!/bin/sh
+#
+# a ftrace-based flightrecorer.
+#
+# chkconfig:   345 95 99
+# description: Enable flightrecorder. Run trace-cmd to enable ftrace \
+# with the events that are defined in /etc/sysconfig/trace-cmd
+# config: /etc/sysconfig/trace-cmd
+
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of version 2 of the GNU Lesser General Public License
+# as published by the Free Software Foundation.
+
+### BEGIN INIT INFO
+# Provides: trace-cmd scripts startup
+# Required-Start: $local_fs
+# Required-Stop: $local_fs
+# Default-Start: 3 4 5
+# Default-Stop: 0 1 2 6
+# Short-Description: Start and stop flightrecorder.
+# Description:      Enable flightrecorder. Run trace-cmd to enable ftrace
+#    with the events that are defined in /etc/sysconfig/trace-cmd
+### END INIT INFO
+
+LOG_FILE=/var/log/trace-cmd.log
+
+#-----------------------------------------------------------------
+# Nice helper functions from systemtap.
+#-----------------------------------------------------------------
+log () { # message
+  echo `LC_ALL=en date +"%b %e %T"`": $1" >> "$LOG_FILE"
+}
+clog () { # message [-n]
+  echo $2 "$1"
+  log "$1"
+}
+slog () { # message
+  logger "$1" # if syslogd is running, this message will be sent to syslog.
+  log "$1"
+}
+logex () { # command
+  eval log \"Exec: $@\"
+  "$@" >> "$LOG_FILE" 2>&1
+  return $?
+}
+do_warning () { # message
+  slog "Warning: $1"
+  warning "$1"
+}
+do_failure () { # message
+  slog "Error: $1"
+  failure "$1"
+}
+do_success () { # message
+  log "Pass: $1"
+  success "$1"
+}
+
+# Source function library.
+. /etc/rc.d/init.d/functions
+
+prog="trace-cmd"
+config=/etc/sysconfig/trace-cmd.config
+
+[ -e /etc/sysconfig/$prog ] && . /etc/sysconfig/$prog
+
+lockfile=/var/lock/subsys/$prog
+
+enable_ftrace() {
+    logex trace-cmd start $OPTS
+    retval=$?
+    if [ $retval -eq 0 ]; then
+	do_success
+    else
+	do_failure $"trace-cmd failed failed"
+    fi
+    return $retval
+}
+
+disable_ftrace() {
+    logex trace-cmd reset
+    if [[ $? != 0 ]]; then
+	do_failure $"trace-cmd failed"
+    fi
+    return $?
+}
+
+start() {
+    [[ -f $config ]] || exit 6
+    clog $"Starting $prog: " -n
+
+    # Source the config file
+    . $config
+
+    if [[ -z $OPTS ]]; then
+	do_failure $"no options specified"; echo
+	return 1
+    fi
+
+    enable_ftrace
+    retval=$?
+    echo
+    [[ $retval -eq 0 ]] && touch $lockfile
+    return $retval
+}
+
+stop() {
+    clog $"Stopping $prog: " -n
+
+    disable_ftrace
+    retval=$?
+
+    if [[ $retval -eq 0 ]]; then
+	rm -f $lockfile
+	do_success
+    else
+	do_failure
+    fi
+    echo
+    return $retval
+}
+
+restart() {
+    stop
+    start
+}
+
+f_status() {
+	local base
+
+	base=${1##*/}
+
+	# See if /var/lock/subsys/${base} exists
+	if [ -f /var/lock/subsys/${base} ]; then
+	    echo $"${base} is running..."
+	    return 0
+	else
+	    echo $"${base} is stopped"
+	    return 3
+	fi
+}
+
+case "$1" in
+    start)
+        $1
+        ;;
+    stop)
+        $1
+        ;;
+    restart)
+        $1
+        ;;
+    status)
+	f_status $prog
+        ;;
+    *)
+        echo $"Usage: $0 {start|stop|restart|status}"
+        exit 2
+esac
+exit $?
