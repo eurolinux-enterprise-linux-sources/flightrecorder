@@ -1,6 +1,6 @@
 Name: flightrecorder
 Version: 0.91
-Release: 4%{?dist}
+Release: 5%{?dist}
 Summary: flightrecorder - runs trace-cmd to enable ftrace with predefined events
 
 Group: Development/Tools
@@ -23,6 +23,9 @@ flightrecorder - runs trace-cmd to enable ftrace with events defined in /etc/sys
 %setup -q
 %patch1 -p1
 
+%preun
+chkconfig --del trace-cmd
+
 %build
 
 %install
@@ -37,9 +40,6 @@ chkconfig --add trace-cmd
 chkconfig --level 345 trace-cmd on
 chkconfig --level 0126 trace-cmd off
 
-%postun
-chkconfig --del trace-cmd
-
 %files
 %defattr(-,root,root,-)
 %{_initrddir}/*
@@ -47,6 +47,10 @@ chkconfig --del trace-cmd
 %{_sysconfdir}/logrotate.d/*
 
 %changelog
+* Mon Sep 12 2016 John Kacur - 0.91-5
+- Fix postun script failure when doing rpm -e flightrecorder
+Resolves: rhbz#1324526
+
 * Fri Dec 18 2015 John Kacur - 0.91-4
 - flightrecorder: trace-cmd.config Add the -i option
 Resolves: rhbz#1292404
